@@ -317,7 +317,26 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+    // sign  exp  frac
+    //  1     8    23
+    unsigned sign = (uf >> 31) & 0x01;
+    unsigned exp = (uf >> 23) & 0xFF;
+    unsigned frac = uf & 0x7FFFFF;
+    // NaN
+    if (exp == 0xFF) {
+       return uf; 
+    }
+    // 非规格化
+    else if (exp == 0) {
+        frac = frac << 1;
+        return (sign << 31) | (exp << 23) | frac;
+    } 
+    // 规格化
+    else {
+        exp ++;
+        return (sign << 31) | (exp << 23) | frac;
+    }
+
 }
 /*
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -332,7 +351,29 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+    // sign  exp  frac
+    //  1     8    23
+    unsigned sign = (uf >> 31) & 0x01;
+    unsigned exp = (uf >> 23) & 0xFF;
+    unsigned frac = uf & 0x7FFFFF;
+
+    // E = exp - Bias = exp - 127
+    int E = exp - 127;
+    // 超过范围
+    if (E >= 31) {
+       return 0x80000000u; 
+    } 
+    // 小数
+    if (E < 0) {
+        return 0;
+    }
+
+    // M = frac + 1;
+    unsigned unsigned_res = (frac >> (23 - E)) | (1 << E);
+    if (sign) {
+        return - unsigned_res;
+    }
+    return unsigned_res;
 }
 /*
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -348,5 +389,44 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    // 非规格化最小值
+    // 0 00000000 00000000000000000000001
+    // E = 1 - Bias = 1 - 127 = 126
+    // frac = 1 * 2^-22
+    // M = frac
+    // V = 2^E * M = 2^-148 
+    if (x < -148) {
+        return 0;
+    }
+
+    // 非规格化最大值
+    // 0 000000 111111111111111111111111
+    // E = 1 - Bias = 1 - 127 = -126
+    // frac = 1 (近似,小于)
+    // M = frac
+    // V = 2^E * M = 2^-126 (近似，小于)
+    if (x < -126) {
+       return 1 <<  (x + 148);
+    }
+
+    // 规格化最大值
+    // 0 11111110 11111111111111111111111
+    // E = exp - Bias = 254 - 127 = 127
+    // M = 1 + frac = 1.111111111111111111111111
+    // V = 2^E * M = 2^128 (近似,小于)
+    if (x >= 128) {
+        return 0xFF << 23;
+    }
+
+    // 规格化最小值
+    // 0 00000001 00000000000000000000000
+    // E = exp - Bias = 1 - 127 = -126
+    // M = 1 + frac = 1
+    // V = 2^E * M = 2^-126
+    if (x >= -126) {
+        int exp = x + 127;
+        return  exp << 23;
+    }
+    return 0;
 }
+
